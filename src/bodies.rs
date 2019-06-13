@@ -5,6 +5,9 @@ use specs::{Component, DenseVecStorage, FlaggedStorage};
 
 use crate::math::{Isometry3, Matrix3, Point3, Vector3};
 
+#[cfg(feature = "amethyst_core")]
+use amethyst_core::Transform;
+
 /// An implementation of the `Position` trait is required for the
 /// synchronisation of the position of Specs and nphysics objects.
 ///
@@ -16,6 +19,28 @@ pub trait Position<N: RealField>:
 {
     fn as_isometry(&self) -> Isometry3<N>;
     fn set_isometry(&mut self, isometry: &Isometry3<N>);
+}
+
+#[cfg(feature = "amethyst_core")]
+impl Position<f32> for Transform {
+    fn as_isometry(&self) -> Isometry3<f32>{
+        nalgebra::convert(self.isometry())
+    }
+
+    fn set_isometry(&mut self, isometry: &Isometry3<f32>){
+        self.set_isometry(nalgebra::convert(isometry));
+    }
+}
+
+#[cfg(feature = "amethyst_core")]
+impl Position<f64> for Transform {
+    fn as_isometry(&self) -> Isometry3<f64> {
+        nalgebra::convert(self.isometry())
+    }
+
+    fn set_isometry(&mut self, isometry: &Isometry3<f64>){
+        self.set_isometry(nalgebra::convert(isometry));
+    }
 }
 
 /// The `PhysicsBody` `Component` represents a `PhysicsWorld` `RigidBody` in
