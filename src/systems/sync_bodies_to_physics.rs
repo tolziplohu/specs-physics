@@ -1,8 +1,16 @@
 use std::marker::PhantomData;
 
 use specs::{
-    storage::ComponentEvent, world::Index, BitSet, Join, ReadStorage, ReaderId, Resources, System,
-    SystemData, WriteExpect, WriteStorage,
+    storage::ComponentEvent,
+    world::Index,
+    BitSet,
+    Join,
+    ReadStorage,
+    ReaderId,
+    System,
+    SystemData,
+    WriteExpect,
+    WriteStorage,
 };
 
 use crate::{
@@ -64,13 +72,12 @@ where
         {
             // handle inserted events
             if inserted_positions.contains(id) || inserted_physics_bodies.contains(id) {
-                debug!("Inserted PhysicsBody with id: {}", id);
+                info!("Inserted PhysicsBody with id: {}", id);
                 add_rigid_body::<N, P>(id, &position, &mut physics, &mut physics_body);
             }
 
             // handle modified events
             if modified_positions.contains(id) || modified_physics_bodies.contains(id) {
-                debug!("Modified PhysicsBody with id: {}", id);
                 update_rigid_body::<N, P>(
                     id,
                     &position,
@@ -83,26 +90,10 @@ where
 
             // handle removed events
             if removed_positions.contains(id) || removed_physics_bodies.contains(id) {
-                debug!("Removed PhysicsBody with id: {}", id);
+                info!("Removed PhysicsBody with id: {}", id);
                 remove_rigid_body::<N, P>(id, &mut physics);
             }
         }
-    }
-
-    fn setup(&mut self, res: &mut World) {
-        info!("SyncBodiesToPhysicsSystem.setup");
-        Self::SystemData::setup(res);
-
-        // initialise required resources
-        res.entry::<Physics<N>>().or_insert_with(Physics::default);
-
-        // register reader id for the Position storage
-        let mut position_storage: WriteStorage<P> = SystemData::fetch(&res);
-        self.positions_reader_id = Some(position_storage.register_reader());
-
-        // register reader id for the PhysicsBody storage
-        let mut physics_body_storage: WriteStorage<PhysicsBody<N>> = SystemData::fetch(&res);
-        self.physics_bodies_reader_id = Some(physics_body_storage.register_reader());
     }
 }
 
@@ -200,8 +191,12 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        nalgebra::Isometry3, nphysics::object::BodyStatus, systems::SyncBodiesToPhysicsSystem,
-        Physics, PhysicsBodyBuilder, SimplePosition,
+        nalgebra::Isometry3,
+        nphysics::object::BodyStatus,
+        systems::SyncBodiesToPhysicsSystem,
+        Physics,
+        PhysicsBodyBuilder,
+        SimplePosition,
     };
 
     use specs::prelude::*;

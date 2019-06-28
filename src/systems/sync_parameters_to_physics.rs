@@ -55,14 +55,6 @@ impl<'s, N: RealField> System<'s> for SyncParametersToPhysicsSystem<N> {
             }
         }
     }
-
-    fn setup(&mut self, res: &mut World) {
-        info!("SyncParametersToPhysicsSystem.setup");
-        Self::SystemData::setup(res);
-
-        // initialise required resources
-        res.entry::<Physics<N>>().or_insert_with(Physics::default);
-    }
 }
 
 impl<N> Default for SyncParametersToPhysicsSystem<N>
@@ -81,7 +73,10 @@ mod tests {
     use specs::prelude::*;
 
     use crate::{
-        nalgebra::Vector3, parameters::Gravity, systems::SyncParametersToPhysicsSystem, Physics,
+        nalgebra::Vector3,
+        parameters::Gravity,
+        systems::SyncParametersToPhysicsSystem,
+        Physics,
     };
 
     #[test]

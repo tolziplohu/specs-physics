@@ -5,6 +5,7 @@ use specs::{Component, DenseVecStorage, FlaggedStorage};
 use crate::{
     nalgebra::{DMatrix, Isometry3, Point2, Point3, RealField, Unit, Vector3},
     ncollide::{
+        pipeline::object::CollisionGroups,
         shape::{
             Ball,
             Capsule,
@@ -19,12 +20,8 @@ use crate::{
             TriMesh,
             Triangle,
         },
-        world::CollisionGroups,
     },
-    nphysics::{
-        material::{BasicMaterial, MaterialHandle},
-        object::ColliderHandle,
-    },
+    nphysics::material::{BasicMaterial, MaterialHandle},
 };
 
 pub type MeshData<N> = (Vec<Point3<N>>, Vec<Point3<usize>>, Option<Vec<Point2<N>>>);
@@ -140,7 +137,6 @@ impl<N: RealField> Shape<N> {
 /// the physic worlds `Collider`.
 #[derive(Clone)]
 pub struct PhysicsCollider<N: RealField> {
-    pub(crate) handle: Option<ColliderHandle>,
     pub shape: Shape<N>,
     pub offset_from_parent: Isometry3<N>,
     pub density: N,
@@ -300,7 +296,6 @@ impl<N: RealField> PhysicsColliderBuilder<N> {
     /// `PhysicsColliderBuilder` instance.
     pub fn build(self) -> PhysicsCollider<N> {
         PhysicsCollider {
-            handle: None,
             shape: self.shape,
             offset_from_parent: self.offset_from_parent,
             density: self.density,

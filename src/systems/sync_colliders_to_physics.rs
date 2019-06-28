@@ -1,8 +1,15 @@
 use std::marker::PhantomData;
 
 use specs::{
-    storage::ComponentEvent, world::Index, Join, ReadStorage, ReaderId, Resources, System,
-    SystemData, WriteExpect, WriteStorage,
+    storage::ComponentEvent,
+    world::Index,
+    Join,
+    ReadStorage,
+    ReaderId,
+    System,
+    SystemData,
+    WriteExpect,
+    WriteStorage,
 };
 
 use crate::{
@@ -10,7 +17,8 @@ use crate::{
     colliders::PhysicsCollider,
     nalgebra::RealField,
     nphysics::object::{BodyPartHandle, ColliderDesc},
-    Physics, PhysicsParent,
+    Physics,
+    PhysicsParent,
 };
 
 use super::iterate_component_events;
@@ -94,23 +102,6 @@ where
             .channel()
             .read(self.physics_colliders_reader_id.as_mut().unwrap());
         for _ in event_iter {}
-    }
-
-    fn setup(&mut self, res: &mut World) {
-        info!("SyncCollidersToPhysicsSystem.setup");
-        Self::SystemData::setup(res);
-
-        // initialise required resources
-        res.entry::<Physics<N>>().or_insert_with(Physics::default);
-
-        // register reader id for the Position storage
-        let mut position_storage: WriteStorage<P> = SystemData::fetch(&res);
-        self.positions_reader_id = Some(position_storage.register_reader());
-
-        // register reader id for the PhysicsBody storage
-        let mut physics_collider_storage: WriteStorage<PhysicsCollider<N>> =
-            SystemData::fetch(&res);
-        self.physics_colliders_reader_id = Some(physics_collider_storage.register_reader());
     }
 }
 
@@ -223,11 +214,6 @@ where
 
     // update collision groups
     collider_world.set_collision_groups(collider_handle, physics_collider.collision_groups);
-
-    info!(
-        "Updated collider in world with values: {:?}",
-        physics_collider
-    );
 }
 
 fn remove_collider<N, P>(id: Index, physics: &mut Physics<N>)
@@ -254,8 +240,12 @@ mod tests {
     use specs::prelude::*;
 
     use crate::{
-        colliders::Shape, nalgebra::Isometry3, systems::SyncCollidersToPhysicsSystem, Physics,
-        PhysicsColliderBuilder, SimplePosition,
+        colliders::Shape,
+        nalgebra::Isometry3,
+        systems::SyncCollidersToPhysicsSystem,
+        Physics,
+        PhysicsColliderBuilder,
+        SimplePosition,
     };
 
     #[test]
