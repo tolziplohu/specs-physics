@@ -3,6 +3,7 @@ extern crate log;
 extern crate simple_logger;
 
 use specs::{Builder, World, WorldExt};
+
 use specs_physics::{
     colliders::Shape,
     nalgebra::{Isometry3, Vector3},
