@@ -1,12 +1,11 @@
 use std::marker::PhantomData;
 
-use specs::{Read, System, SystemData, World, WriteExpect};
-
 use crate::{
     nalgebra::RealField,
     parameters::{Gravity, PhysicsIntegrationParameters, PhysicsProfilingEnabled},
     Physics,
 };
+use specs::{Read, System, SystemData, World, WriteExpect};
 
 /// The `SyncParametersToPhysicsSystem` synchronises the simulation parameters
 /// with the nphysics `World`.
