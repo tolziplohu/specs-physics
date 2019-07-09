@@ -81,10 +81,7 @@ mod tests {
     use specs::prelude::*;
 
     use crate::{
-        nalgebra::Vector3,
-        parameters::Gravity,
-        systems::SyncParametersToPhysicsSystem,
-        Physics,
+        nalgebra::Vector3, parameters::Gravity, systems::SyncParametersToPhysicsSystem, Physics,
     };
 
     #[test]
