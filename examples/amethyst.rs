@@ -21,7 +21,10 @@ use amethyst::{
         },
         shape::{Shape as AmethystShape, ShapeUpload},
         types::DefaultBackend,
-        Camera, GraphCreator, RenderingSystem, Texture,
+        Camera,
+        GraphCreator,
+        RenderingSystem,
+        Texture,
     },
     utils::application_root_dir,
     window::{DisplayConfig, ScreenDimensions, Window, WindowBundle},
@@ -32,10 +35,18 @@ use specs_physics::{
     nalgebra::Vector3,
     nphysics::{algebra::Velocity3, object::BodyStatus},
     parameters::Gravity,
-    PhysicsBody, PhysicsBodyBuilder, PhysicsColliderBuilder,
+    PhysicsBody,
+    PhysicsBodyBuilder,
+    PhysicsColliderBuilder,
 };
 
-fn create_object(world: &mut World, status: BodyStatus, shape: Shape<Float>, translation: [f32; 3], velocity: [f32; 3]) -> EntityBuilder {
+fn create_object(
+    world: &mut World,
+    status: BodyStatus,
+    shape: Shape<Float>,
+    translation: [f32; 3],
+    velocity: [f32; 3],
+) -> EntityBuilder {
     let mut transform = Transform::default();
 
     transform.append_translation(Vector3::<Float>::new(
@@ -47,9 +58,15 @@ fn create_object(world: &mut World, status: BodyStatus, shape: Shape<Float>, tra
     world
         .create_entity()
         .with(transform)
-        .with(PhysicsBodyBuilder::<Float>::from(status)
-            .velocity(Velocity3::linear(velocity[0].into(), velocity[1].into(), velocity[2].into()))
-            .build())
+        .with(
+            PhysicsBodyBuilder::<Float>::from(status)
+                .velocity(Velocity3::linear(
+                    velocity[0].into(),
+                    velocity[1].into(),
+                    velocity[2].into(),
+                ))
+                .build(),
+        )
         .with(PhysicsColliderBuilder::<Float>::from(shape).build())
 }
 
@@ -192,17 +209,19 @@ impl<'a, 'b> SimpleState for State<'a, 'b> {
             (),
         );
 
-        create_object(data.world, 
-            BodyStatus::Kinematic, 
+        create_object(
+            data.world,
+            BodyStatus::Kinematic,
             Shape::<Float>::Cuboid {
                 half_extents: Vector3::<Float>::new(0.5.into(), 0.5.into(), 0.5.into()),
-            }, 
-            [0.1, 1.3, 0.1], 
-            [0.0, 1.0, 0.0])
-            .with(material.clone())
-            .with(cube.clone())
-            .with(Toy::default())
-            .build();
+            },
+            [0.1, 1.3, 0.1],
+            [0.0, 1.0, 0.0],
+        )
+        .with(material.clone())
+        .with(cube.clone())
+        .with(Toy::default())
+        .build();
 
         let sphere = AmethystShape::Sphere(32, 32)
             .upload::<(Vec<Position>, Vec<Normal>, Vec<TexCoord>), _>(
@@ -211,23 +230,27 @@ impl<'a, 'b> SimpleState for State<'a, 'b> {
                 (),
             );
 
-        create_object(data.world, 
-            BodyStatus::Dynamic, 
-            Shape::<Float>::Ball { radius: 0.5.into() }, 
-            [-0.1, 3.3, -0.1], 
-            [0.0, 0.0, 0.0])
-            .with(material.clone())
-            .with(sphere.clone())
-            .build();
+        create_object(
+            data.world,
+            BodyStatus::Dynamic,
+            Shape::<Float>::Ball { radius: 0.5.into() },
+            [-0.1, 3.3, -0.1],
+            [0.0, 0.0, 0.0],
+        )
+        .with(material.clone())
+        .with(sphere.clone())
+        .build();
 
-        create_object(data.world, 
-            BodyStatus::Static, 
-            Shape::<Float>::Ball { radius: 0.5.into() }, 
-            [0.0, 0.0, 0.0], 
-            [0.0, 0.0, 0.0])
-            .with(material.clone())
-            .with(sphere.clone())
-            .build();
+        create_object(
+            data.world,
+            BodyStatus::Static,
+            Shape::<Float>::Ball { radius: 0.5.into() },
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        )
+        .with(material.clone())
+        .with(sphere.clone())
+        .build();
 
         let plane = AmethystShape::Cube.upload::<(Vec<Position>, Vec<Normal>, Vec<TexCoord>), _>(
             Some((1000.0, 0.0001, 1000.0)),
@@ -268,7 +291,8 @@ impl<'a, 'b> SimpleState for State<'a, 'b> {
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
 
-    // Our systems for simulation are being added to a fixed dispatcher in our State's on_start.
+    // Our systems for simulation are being added to a fixed dispatcher in our
+    // State's on_start.
     let game_data = GameDataBuilder::default()
         .with_bundle(WindowBundle::from_config(DisplayConfig::default()))?
         .with_thread_local(RenderingSystem::<DefaultBackend, _>::new(
@@ -291,7 +315,8 @@ struct ExampleGraph {
 
 impl GraphCreator<DefaultBackend> for ExampleGraph {
     fn rebuild(&mut self, res: &Resources) -> bool {
-        // Rebuild when dimensions change, but wait until at least two frames have the same.
+        // Rebuild when dimensions change, but wait until at least two frames have the
+        // same.
         let new_dimensions = res.try_fetch::<ScreenDimensions>();
         use std::ops::Deref;
         if self.dimensions.as_ref() != new_dimensions.as_ref().map(|d| d.deref()) {

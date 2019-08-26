@@ -40,14 +40,6 @@ where
             }
         }
     }
-
-    fn setup(&mut self, res: &mut World) {
-        info!("SyncBodiesFromPhysicsSystem.setup");
-        Self::SystemData::setup(res);
-
-        // initialise required resources
-        res.entry::<Physics<N>>().or_insert_with(Physics::default);
-    }
 }
 
 impl<N, P> Default for SyncBodiesFromPhysicsSystem<N, P>
