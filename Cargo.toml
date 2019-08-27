@@ -24,10 +24,12 @@ amethyst-transform = ["amethyst"]
 amethyst-example = ["amethyst", "amethyst/renderer"]
 
 [dependencies]
-objekt = "0.1.2"
 log = "0.4.8"
+bitflags = "1.1.0"
+objekt = "0.1.2"
+shrinkwraprs = "0.2.1"
 
-specs = "0.15.0"
+specs = { version = "0.15.0", features = ["specs-derive"] }
 specs-hierarchy = "0.5.1"
 
 nalgebra = "0.18.0"

@@ -1,15 +1,17 @@
-#[cfg(feature = "serialization")]
-use serde::{Deserialize, Serialize};
-
 use super::{
+    cross::GeneralizedCross,
     status::{ActivationStatus, BodyStatus, BodyUpdateStatus},
-    GeneralizedCross,
     Acceleration,
-    ExternalForces,
-    GlobalInertia,
+    AngularInertia,
     AugmentedInertia,
-    AugmentedInertiaInv,
+    CenterOfMass,
+    CombinedInertia,
+    ExternalForces,
+    GlobalCenterOfMass,
+    GlobalInertia,
+    InvertedAugmentedInertia,
     Mass,
+    Motion,
     Velocity,
 };
 
@@ -20,7 +22,17 @@ use crate::{
         shape::DeformationsType,
     },
     nphysics::{
-        math::{Force, ForceType, Inertia, Isometry, Point, Vector, SPATIAL_DIM},
+        math::{
+            Force,
+            ForceType,
+            Inertia,
+            Isometry,
+            Point,
+            SpatialVector,
+            Vector,
+            Velocity as NVelocity,
+            SPATIAL_DIM,
+        },
         object::{
             ActivationStatus as NActivationStatus,
             Body,
@@ -34,17 +46,126 @@ use crate::{
     position::Position,
 };
 
-/// When paired with a Position, Velocity, and Mass, designates an entity as a
-/// rigid body, and thus describes that rigid body's characteristics.
-#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
-pub struct RigidBodyProperties<N: RealField> {
-    pub gravity_enabled: bool,
+use bitflags::bitflags;
+use specs::{prelude::*, Component};
 
-    /// Which linear degrees of freedom are kinematic
-    pub kinematic_translations: Vector<bool>,
-    /// Which angular degrees of freedom are kinematic
-    pub kinematic_rotations: Vector<bool>,
+#[cfg(feature = "serialization")]
+use serde::{Deserialize, Serialize};
+
+bitflags! {
+    /// Component tracking changes for a body. This will be sticky business...
+    ///
+    /// # Size
+    /// 1 Byte
+    #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
+    #[derive(Component)]
+    pub struct RigidBodyFlags: u8 {
+        /// Whether the linear X axis is a kinematic degree of freedom
+        const KINEMATIC_TRANSLATION_X      = 0b10000000;
+
+        /// Whether the linear Y axis is a kinematic degree of freedom
+        const KINEMATIC_TRANSLATION_Y      = 0b01000000;
+
+        /// Whether the linear Z axis is a kinematic degree of freedom
+        /// Ignored when the `dim2` feature is set.
+        const KINEMATIC_TRANSLATION_Z      = 0b00100000;
+
+        /// Whether the angular X axis is a kinematic degree of freedom
+        const KINEMATIC_ROTATION_X         = 0b00010000;
+
+        /// Whether the angular Y axis is a kinematic degree of freedom
+        /// Ignored when the `dim2` feature is set.
+        const KINEMATIC_ROTATION_Y         = 0b00001000;
+
+        /// Whether the angular Z axis is a kinematic degree of freedom
+        /// Ignored when the `dim2` feature is set.
+        const KINEMATIC_ROTATION_Z         = 0b00000100;
+
+        /// Enables the universal gravitational force for this Body.
+        const GRAVITY_ENABLED              = 0b00000010;
+
+        /// Enables linear motion interpolation for CCD
+        const LINEAR_INTERPOLATION_ENABLED = 0b00000001;
+    }
+}
+
+impl Default for RigidBodyFlags {
+    #[inline]
+    fn default() -> Self {
+        RigidBodyFlags::GRAVITY_ENABLED
+    }
+}
+
+#[cfg(feature = "dim3")]
+impl<N: RealField> Into<SpatialVector<N>> for RigidBodyFlags {
+    fn into(self) -> SpatialVector<N> {
+        SpatialVector::new(
+            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_X) {
+                N::one()
+            } else {
+                N::zero()
+            },
+            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_Y) {
+                N::one()
+            } else {
+                N::zero()
+            },
+            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_Z) {
+                N::one()
+            } else {
+                N::zero()
+            },
+            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_X) {
+                N::one()
+            } else {
+                N::zero()
+            },
+            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_Y) {
+                N::one()
+            } else {
+                N::zero()
+            },
+            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_Z) {
+                N::one()
+            } else {
+                N::zero()
+            },
+        )
+    }
+}
+
+#[cfg(feature = "dim2")]
+impl<N: RealField> Into<SpatialVector<N>> for RigidBodyFlags {
+    fn into(self) -> SpatialVector<N> {
+        SpatialVector::new(
+            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_X) {
+                N::one()
+            } else {
+                N::zero()
+            },
+            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_Y) {
+                N::one()
+            } else {
+                N::zero()
+            },
+            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_X) {
+                N::one()
+            } else {
+                N::zero()
+            },
+        )
+    }
+}
+
+/// Component that describes a rigid body's characteristics.
+///
+/// # Size
+/// 4 x `RealField` + `usize` + 1 byte
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
+#[derive(Component, Debug, Clone, PartialEq)]
+pub struct RigidBodyProperties<N: RealField> {
+    /// Associated flags for this body
+    pub flags: RigidBodyFlags,
 
     /// Linear damping/drag coefficient
     pub damping: N,
@@ -56,25 +177,19 @@ pub struct RigidBodyProperties<N: RealField> {
     /// Maximum allowed angular velocity
     pub max_velocity_angular: N,
 
-    /// Enables linear motion interpolation for CCD
-    pub linear_motion_interpolation_enabled: bool,
-
     // LOL idk.
-    pub companion_id: usize,
+    pub(crate) companion_id: usize,
 }
 
 impl<N: RealField> Default for RigidBodyProperties<N> {
     #[inline]
     fn default() -> Self {
         RigidBodyProperties {
-            gravity_enabled: true,
-            kinematic_translations: Vector::repeat(false),
-            kinematic_rotations: Vector::repeat(false),
+            flags: RigidBodyFlags::default(),
             damping: N::zero(),
             damping_angular: N::zero(),
             max_velocity: N::max_value(),
             max_velocity_angular: N::max_value(),
-            linear_motion_interpolation_enabled: false,
             companion_id: 0,
         }
     }
@@ -87,9 +202,12 @@ struct RigidBody<N: RealField, P: Position<N>> {
     acceleration: Box<Acceleration<N>>,
     external_forces: Box<ExternalForces<N>>,
     mass: Box<Mass<N>>,
+    center_of_mass: Box<CenterOfMass<N>>,
+    global_center_of_mass: Box<GlobalCenterOfMass<N>>,
+    angular_inertia: Box<AngularInertia<N>>,
     global_inertia: Box<GlobalInertia<N>>,
     augmented_inertia: Box<AugmentedInertia<N>>,
-    augmented_inertia_inv: Box<AugmentedInertiaInv<N>>,
+    augmented_inertia_inv: Box<InvertedAugmentedInertia<N>>,
     properties: Box<RigidBodyProperties<N>>,
     activation: Box<ActivationStatus<N>>,
     status: Box<BodyStatus>,
@@ -99,7 +217,8 @@ struct RigidBody<N: RealField, P: Position<N>> {
 impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
     #[inline]
     fn activation_status(&self) -> &NActivationStatus<N> {
-        &(*self.activation).into()
+        let status = (*self.activation).into();
+        &status
     }
 
     #[inline]
@@ -132,7 +251,7 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
     #[inline]
     fn set_status(&mut self, status: NBodyStatus) {
         if status != (*self.status).into() {
-            self.update.status_changed = true;
+            self.update.insert(BodyUpdateStatus::STATUS_CHANGED);
         }
         *self.status = match status {
             NBodyStatus::Disabled => BodyStatus::Disabled,
@@ -169,12 +288,12 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
 
     #[inline]
     fn generalized_velocity(&self) -> DVectorSlice<N> {
-        DVectorSlice::from_slice(self.velocity.as_slice(), SPATIAL_DIM)
+        DVectorSlice::from_slice((*self.velocity).as_slice(), SPATIAL_DIM)
     }
 
     #[inline]
     fn generalized_velocity_mut(&mut self) -> DVectorSliceMut<N> {
-        self.update.velocity_changed = true;
+        self.update.insert(BodyUpdateStatus::VELOCITY_CHANGED);
         DVectorSliceMut::from_slice(self.velocity.as_mut_slice(), SPATIAL_DIM)
     }
 
@@ -221,7 +340,10 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
             }
         }
 
-        let disp = *self.velocity * parameters.dt();
+        let disp = Motion {
+            linear: self.velocity.linear * parameters.dt(),
+            angular: self.velocity.angular * parameters.dt(),
+        };
         self.apply_displacement(&disp.as_slice());
     }
 
@@ -241,12 +363,16 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
 
     fn advance(&mut self, time_ratio: N) {
         let motion = self.part_motion(0, N::zero()).unwrap();
+        let mut i = Isometry::identity();
         self.next_position.set_isometry(match motion {
-            BodyPartMotion::RigidLinear(m) => &Isometry::from_parts(
-                (m.start.translation.vector + m.velocity * (time_ratio - m.t0)).into(),
-                m.start.rotation,
-            ),
-            BodyPartMotion::RigidNonlinear(m) => &{
+            BodyPartMotion::RigidLinear(m) => {
+                i.translation =
+                    (m.start.translation.vector + m.velocity * (time_ratio - m.t0)).into();
+                i.rotation = m.start.rotation;
+
+                &i
+            }
+            BodyPartMotion::RigidNonlinear(m) => {
                 let scaled_linvel = m.linvel * (time_ratio - m.t0);
                 let scaled_angvel = m.angvel * (time_ratio - m.t0);
 
@@ -254,9 +380,16 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
                 let lhs = m.start.translation * Translation::from(center);
                 let rhs = Translation::from(-center) * m.start.rotation;
 
-                lhs * Isometry::new(scaled_linvel, scaled_angvel) * rhs
-            },
-            BodyPartMotion::Static(m) => &m,
+                let ret = lhs * Isometry::new(scaled_linvel, scaled_angvel) * rhs;
+                i.translation = ret.translation;
+                i.rotation = ret.rotation;
+                &i
+            }
+            BodyPartMotion::Static(m) => {
+                i.translation = m.translation;
+                i.rotation = m.rotation;
+                &i
+            }
         });
     }
 
@@ -265,7 +398,11 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
     }
 
     fn clamp_advancement(&mut self) {
-        if self.properties.linear_motion_interpolation_enabled {
+        if self
+            .properties
+            .flags
+            .contains(RigidBodyFlags::LINEAR_INTERPOLATION_ENABLED)
+        {
             let p0 = Isometry::from_parts(
                 self.next_position.isometry().translation,
                 self.position.isometry().rotation,
@@ -277,7 +414,11 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
     }
 
     fn part_motion(&self, _: usize, time_origin: N) -> Option<BodyPartMotion<N>> {
-        if self.properties.linear_motion_interpolation_enabled {
+        if self
+            .properties
+            .flags
+            .contains(RigidBodyFlags::LINEAR_INTERPOLATION_ENABLED)
+        {
             let p0 = Isometry::from_parts(
                 self.next_position.isometry().translation,
                 self.position.isometry().rotation,
@@ -289,7 +430,7 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
             let motion = ConstantVelocityRigidMotion::new(
                 time_origin,
                 *self.next_position.isometry(),
-                self.mass.center,
+                **self.center_of_mass,
                 self.velocity.linear,
                 self.velocity.angular,
             );
@@ -311,7 +452,11 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
             #[cfg(feature = "dim3")]
             BodyStatus::Dynamic => {
                 // The inverse inertia matrix is constant in 2D.
-                let transformed = self.mass.transformed(*self.position.isometry());
+                let transformed = CombinedInertia {
+                    linear: self.mass.0,
+                    angular: self.angular_inertia.0,
+                }
+                .transformed(*self.position.isometry());
                 self.global_inertia.linear = transformed.linear;
                 self.global_inertia.angular = transformed.angular;
                 self.augmented_inertia.linear = transformed.linear;
@@ -347,21 +492,32 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
                     /*
                      * Compute acceleration due to gyroscopic forces.
                      */
-                    let i = &self.mass.angular;
+                    let i = self.global_inertia.angular;
                     let w = &self.velocity.angular;
                     let iw = i * w;
                     let gyroscopic = -w.cross(&iw);
                     self.acceleration.angular = self.augmented_inertia_inv.angular * gyroscopic;
                 }
 
-                if self.augmented_inertia_inv.linear != N::zero() && self.properties.gravity_enabled {
+                if self.augmented_inertia_inv.linear != N::zero()
+                    && self
+                        .properties
+                        .flags
+                        .contains(RigidBodyFlags::GRAVITY_ENABLED)
+                {
                     self.acceleration.linear = *gravity;
                 }
 
-                self.acceleration += self.augmented_inertia_inv * self.external_forces;
+                let accel: NVelocity<N> =
+                    Inertia::new(
+                        self.augmented_inertia_inv.linear,
+                        self.augmented_inertia_inv.angular,
+                    ) * Force::new(self.external_forces.linear, self.external_forces.angular);
+                self.acceleration.linear += accel.linear;
+                self.acceleration.angular += accel.angular;
                 self.acceleration
                     .as_vector_mut()
-                    .component_mul_assign(&self.jacobian_mask);
+                    .component_mul_assign(&self.properties.flags.into());
             }
             _ => {}
         }
@@ -374,17 +530,25 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
 
     #[inline]
     fn apply_displacement(&mut self, displacement: &[N]) {
-        self.apply_displacement(&Velocity::from_slice(displacement));
+        let displacement = Motion::from_slice(displacement);
+        let displacement = {
+            let shift = Translation::from(self.global_center_of_mass.coords);
+            shift * Isometry::new(displacement.linear, displacement.angular) * shift.inverse()
+        };
+        let new_pos = displacement * self.position.isometry();
+        self.update.insert(BodyUpdateStatus::POSITION_CHANGED);
+        self.position.set_isometry(&new_pos);
+        self.global_center_of_mass.0 = new_pos * self.center_of_mass.0;
     }
 
     #[inline]
     fn world_point_at_material_point(&self, _: &dyn BodyPart<N>, point: &Point<N>) -> Point<N> {
-        self.position * point
+        self.position.isometry() * point
     }
 
     #[inline]
     fn position_at_material_point(&self, _: &dyn BodyPart<N>, point: &Point<N>) -> Isometry<N> {
-        self.position * Translation::from(point.coords)
+        self.position.isometry() * Translation::from(point.coords)
     }
 
     #[inline]
@@ -394,12 +558,16 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
 
     #[inline]
     fn gravity_enabled(&self) -> bool {
-        self.gravity_enabled
+        self.properties
+            .flags
+            .contains(RigidBodyFlags::GRAVITY_ENABLED)
     }
 
     #[inline]
     fn enable_gravity(&mut self, enabled: bool) {
-        self.gravity_enabled = enabled
+        self.properties
+            .flags
+            .set(RigidBodyFlags::GRAVITY_ENABLED, enabled);
     }
 
     #[inline]
@@ -416,12 +584,12 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
         ext_vels: Option<&DVectorSlice<N>>,
         out_vel: Option<&mut N>,
     ) {
-        let pos = point - self.com.coords;
+        let pos = point - self.global_center_of_mass.coords;
         let force = force_dir.at_point(&pos);
         let mut masked_force = force.clone();
         masked_force
             .as_vector_mut()
-            .component_mul_assign(&self.jacobian_mask);
+            .component_mul_assign(&self.properties.flags.into());
 
         match *self.status {
             BodyStatus::Kinematic => {
@@ -434,8 +602,11 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
             BodyStatus::Dynamic => {
                 jacobians[j_id..j_id + SPATIAL_DIM].copy_from_slice(masked_force.as_slice());
 
-                let inv_mass = self.inv_augmented_mass();
-                let imf = *inv_mass * masked_force;
+                let inv_mass = Inertia::new(
+                    self.augmented_inertia_inv.linear,
+                    self.augmented_inertia_inv.angular,
+                );
+                let imf = inv_mass * masked_force;
                 jacobians[wj_id..wj_id + SPATIAL_DIM].copy_from_slice(imf.as_slice());
 
                 *inv_r +=
@@ -479,25 +650,37 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
 
     #[inline]
     fn add_local_inertia_and_com(&mut self, _: usize, com: Point<N>, inertia: Inertia<N>) {
-        self.update.center_of_mass_changed = true;
-        self.update.inertia_changed = true;
+        self.update
+            .insert(BodyUpdateStatus::CENTER_OF_MASS_CHANGED | BodyUpdateStatus::INERTIA_CHANGED);
 
-        let mass_sum = self.inertia.linear + inertia.linear;
+        let mass_sum = self.global_inertia.linear + inertia.linear;
 
         // Update center of mass.
         if !mass_sum.is_zero() {
-            self.local_com =
-                (self.local_com * self.inertia.linear + com.coords * inertia.linear) / mass_sum;
-            self.com = self.position * self.local_com;
+            self.center_of_mass.0 = (self.center_of_mass.0 * self.global_inertia.linear
+                + com.coords * inertia.linear)
+                / mass_sum;
+            self.global_center_of_mass.0 = self.position.isometry() * self.center_of_mass.0;
         } else {
-            self.local_com = Point::origin();
-            self.com = self.position.translation.vector.into();
+            self.center_of_mass.0 = Point::origin();
+            self.global_center_of_mass.0 = self.position.isometry().translation.vector.into();
         }
 
         // Update local inertia.
-        self.mass.linear += inertia.linear;
-        self.mass.angular += inertia.angular;
-        self.update_inertia_from_local_inertia();
+        self.mass.0 += inertia.linear;
+        self.angular_inertia.0 += inertia.angular;
+        let global = CombinedInertia {
+            linear: self.mass.0,
+            angular: self.angular_inertia.0,
+        }
+        .transformed(*self.position.isometry());
+        self.global_inertia.linear = global.linear;
+        self.global_inertia.angular = global.angular;
+        self.augmented_inertia.linear = global.linear;
+        self.augmented_inertia.angular = global.angular;
+        let inverted = global.inverse();
+        self.augmented_inertia_inv.linear = inverted.linear;
+        self.augmented_inertia_inv.angular = inverted.angular;
     }
 
     /*
@@ -522,34 +705,40 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
             ForceType::Force => self.external_forces.as_vector_mut().cmpy(
                 N::one(),
                 force.as_vector(),
-                &self.jacobian_mask,
+                &self.properties.flags.into(),
                 N::one(),
             ),
             ForceType::Impulse => {
-                self.update.velocity_changed = true;
-                let dvel = self.inv_augmented_mass * *force;
+                self.update.insert(BodyUpdateStatus::VELOCITY_CHANGED);
+                let dvel = Inertia::new(
+                    self.augmented_inertia_inv.linear,
+                    self.augmented_inertia_inv.angular,
+                ) * *force;
                 self.velocity.as_vector_mut().cmpy(
                     N::one(),
                     dvel.as_vector(),
-                    &self.jacobian_mask,
+                    &self.properties.flags.into(),
                     N::one(),
                 )
             }
             ForceType::AccelerationChange => {
-                let change = self.augmented_inertia * *force;
+                let change = Inertia::new(
+                    self.augmented_inertia.0.linear,
+                    self.augmented_inertia.0.angular,
+                ) * *force;
                 self.external_forces.as_vector_mut().cmpy(
                     N::one(),
                     change.as_vector(),
-                    &self.jacobian_mask,
+                    &self.properties.flags.into(),
                     N::one(),
                 )
             }
             ForceType::VelocityChange => {
-                self.update.velocity_changed = true;
+                self.update.insert(BodyUpdateStatus::VELOCITY_CHANGED);
                 self.velocity.as_vector_mut().cmpy(
                     N::one(),
                     force.as_vector(),
-                    &self.jacobian_mask,
+                    &self.properties.flags.into(),
                     N::one(),
                 )
             }
@@ -575,7 +764,7 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
         force_type: ForceType,
         auto_wake_up: bool,
     ) {
-        let force = Force::linear_at_point(*force, &(point - self.mass.center.coords));
+        let force = Force::linear_at_point(*force, &(point - self.global_center_of_mass.coords));
         self.apply_force(0, &force, force_type, auto_wake_up)
     }
 
@@ -628,5 +817,58 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
             force_type,
             auto_wake_up,
         )
+    }
+}
+
+impl<P: Position<N>, N: RealField> BodyPart<N> for RigidBody<N, P> {
+    #[inline]
+    fn is_ground(&self) -> bool {
+        false
+    }
+
+    #[inline]
+    fn center_of_mass(&self) -> Point<N> {
+        self.global_center_of_mass.0
+    }
+
+    #[inline]
+    fn local_center_of_mass(&self) -> Point<N> {
+        self.center_of_mass.0
+    }
+
+    #[inline]
+    fn position(&self) -> Isometry<N> {
+        *self.position.isometry()
+    }
+
+    #[inline]
+    fn safe_position(&self) -> Isometry<N> {
+        if self
+            .properties
+            .flags
+            .contains(RigidBodyFlags::LINEAR_INTERPOLATION_ENABLED)
+        {
+            Isometry::from_parts(
+                self.next_position.isometry().translation,
+                self.position.isometry().rotation,
+            )
+        } else {
+            *self.next_position.isometry()
+        }
+    }
+
+    #[inline]
+    fn velocity(&self) -> NVelocity<N> {
+        NVelocity::new(self.velocity.linear, self.velocity.angular)
+    }
+
+    #[inline]
+    fn inertia(&self) -> Inertia<N> {
+        Inertia::new(self.global_inertia.linear, self.global_inertia.angular)
+    }
+
+    #[inline]
+    fn local_inertia(&self) -> Inertia<N> {
+        Inertia::new(self.mass.0, self.angular_inertia.0)
     }
 }
