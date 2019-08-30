@@ -954,7 +954,7 @@ impl<'a, P: Position<N>, N: RealField> Body<N> for RigidBody<'a, N, P> {
     }
 }
 */
-impl<P: Position<N>, N: RealField> BodyPart<N> for RigidBody<'a, N, P> {
+impl<'a, P: Position<N>, N: RealField> BodyPart<N> for RigidBody<'a, N, P> {
     #[inline]
     fn is_ground(&self) -> bool {
         false
