@@ -1,10 +1,12 @@
 use crate::{
     nalgebra::RealField,
     nphysics::math::{Force, Point},
+    position::Position,
 };
 
 use shrinkwraprs::Shrinkwrap;
-use specs::{prelude::*, Component};
+use specs::{prelude::*, storage::UnprotectedStorage, Component};
+use std::{any::Any, marker::PhantomData};
 
 #[cfg(feature = "serialization")]
 use serde::{Deserialize, Serialize};
@@ -17,6 +19,19 @@ mod base;
 mod cross;
 mod rigid;
 mod status;
+
+/// Position used in stepping process.
+///
+/// # Size
+/// Dynamic with `P`
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
+#[derive(Component, Shrinkwrap, Clone, Debug, Default, PartialEq)]
+#[shrinkwrap(mutable)]
+pub struct AdvancePosition<
+    N: RealField,
+    P: Position<N, Storage = PS>,
+    PS: UnprotectedStorage<P> + Any + Send + Sync,
+>(#[shrinkwrap(main_field)] pub P, PhantomData<N>);
 
 /// Velocity component.
 ///

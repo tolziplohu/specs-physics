@@ -1,14 +1,11 @@
 use crate::{
     nalgebra::RealField,
-    nphysics::math::{Force, Inertia, Isometry, Vector},
+    nphysics::math::{Inertia, Isometry, Vector},
 };
 
 use super::{AngularInertia, Mass};
 
-use std::{
-    mem::transmute as mem_transmute,
-    ops::{AddAssign, Mul},
-};
+use std::{mem::transmute as mem_transmute, ops::Mul};
 
 #[cfg(feature = "serialization")]
 use serde::{Deserialize, Serialize};

@@ -240,21 +240,21 @@
 extern crate log;
 
 pub use nalgebra;
+
+#[cfg(feature = "dim3")]
 pub(crate) use ncollide3d as ncollide;
+#[cfg(feature = "dim3")]
 pub(crate) use nphysics3d as nphysics;
 
-use specs::{Dispatcher, DispatcherBuilder};
-
-pub use self::position::Position;
-
-use self::nalgebra::RealField;
+#[cfg(feature = "dim2")]
+pub(crate) use ncollide2d as ncollide;
+#[cfg(feature = "dim2")]
+pub(crate) use nphysics2d as nphysics;
 
 pub mod bodies;
-// pub mod colliders;
-// pub mod events;
-// pub mod parameters;
 pub mod position;
-// pub mod systems;
+
+pub use self::position::Position;
 
 /*
 /// Convenience function for configuring and building a `Dispatcher` with all

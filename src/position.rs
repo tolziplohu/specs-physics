@@ -1,4 +1,5 @@
-use specs::{Component, DenseVecStorage, FlaggedStorage};
+use shrinkwraprs::Shrinkwrap;
+use specs::{prelude::*, Component};
 
 use crate::{nalgebra::RealField, nphysics::math::Isometry};
 
@@ -8,9 +9,7 @@ use crate::{nalgebra::RealField, nphysics::math::Isometry};
 /// Initially, it is used to position bodies in the nphysics `World`. Then after
 /// progressing the `World` it is used to synchronise the updated positions back
 /// towards Specs.
-pub trait Position<N: RealField>:
-    Component<Storage = FlaggedStorage<Self, DenseVecStorage<Self>>> + Send + Sync
-{
+pub trait Position<N: RealField>: Component + Send + Sync {
     fn isometry(&self) -> &Isometry<N>;
     fn isometry_mut(&mut self) -> &mut Isometry<N>;
     fn set_isometry(&mut self, isometry: &Isometry<N>) -> &mut Self;
@@ -31,7 +30,14 @@ impl Position<f32> for amethyst::core::Transform {
     }
 }
 
+#[derive(Component, Shrinkwrap, Clone, Debug, PartialEq)]
 pub struct SimplePosition<N: RealField>(pub Isometry<N>);
+
+impl<N: RealField> Default for SimplePosition<N> {
+    fn default() -> Self {
+        SimplePosition(Isometry::identity())
+    }
+}
 
 impl<N: RealField> Position<N> for SimplePosition<N> {
     fn isometry(&self) -> &Isometry<N> {
@@ -47,8 +53,4 @@ impl<N: RealField> Position<N> for SimplePosition<N> {
         self.0.translation = isometry.translation;
         self
     }
-}
-
-impl<N: RealField> Component for SimplePosition<N> {
-    type Storage = FlaggedStorage<Self, DenseVecStorage<Self>>;
 }
