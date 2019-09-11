@@ -3,7 +3,7 @@ use crate::{
     nphysics::math::{Inertia, Isometry, Vector},
 };
 
-use super::{AngularInertia, Mass};
+use super::components::{AngularInertia, Mass};
 
 use std::{mem::transmute as mem_transmute, ops::Mul};
 
@@ -11,16 +11,10 @@ use std::{mem::transmute as mem_transmute, ops::Mul};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "dim3")]
-pub type AngularInertiaType<N> = crate::nalgebra::Matrix3<N>;
+pub type AngularMotion<N> = Vector<N>;
 
 #[cfg(feature = "dim2")]
-pub type AngularInertiaType<N> = N;
-
-#[cfg(feature = "dim3")]
-pub(crate) type MotionAsVector<N> = crate::nalgebra::Vector6<N>;
-
-#[cfg(feature = "dim2")]
-pub(crate) type MotionAsVector<N> = crate::nalgebra::Vector3<N>;
+pub type AngularMotion<N> = N;
 
 /// Describes a motion, or difference, in space.
 /// Such as a Velocity, an Acceleration, or a Force.
@@ -32,10 +26,7 @@ pub(crate) type MotionAsVector<N> = crate::nalgebra::Vector3<N>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Motion<N: RealField> {
     pub linear: Vector<N>,
-    #[cfg(feature = "dim3")]
-    pub angular: Vector<N>,
-    #[cfg(feature = "dim2")]
-    pub angular: N,
+    pub angular: AngularMotion<N>,
 }
 
 #[cfg(feature = "dim3")]
@@ -71,6 +62,12 @@ impl<N: RealField> Mul<N> for Motion<N> {
         }
     }
 }
+
+#[cfg(feature = "dim3")]
+pub(crate) type MotionAsVector<N> = crate::nalgebra::Vector6<N>;
+
+#[cfg(feature = "dim2")]
+pub(crate) type MotionAsVector<N> = crate::nalgebra::Vector3<N>;
 
 impl<N: RealField> Motion<N> {
     #[inline]
@@ -126,6 +123,12 @@ impl<N: RealField> Motion<N> {
     }
 }
 
+#[cfg(feature = "dim3")]
+pub type AngularInertiaType<N> = crate::nalgebra::Matrix3<N>;
+
+#[cfg(feature = "dim2")]
+pub type AngularInertiaType<N> = N;
+
 /// Struct combining linear and angular inertia
 ///
 /// # Size
@@ -143,8 +146,8 @@ impl<N: RealField> Default for CombinedInertia<N> {
     #[inline]
     fn default() -> Self {
         CombinedInertia {
-            linear: N::zero(),
-            angular: AngularInertiaType::zeros(),
+            linear: N::one(),
+            angular: AngularInertiaType::identity(),
         }
     }
 }
@@ -154,8 +157,8 @@ impl<N: RealField> Default for CombinedInertia<N> {
     #[inline]
     fn default() -> Self {
         CombinedInertia {
-            linear: N::zero(),
-            angular: N::zero(),
+            linear: N::one(),
+            angular: N::one(),
         }
     }
 }

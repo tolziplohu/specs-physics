@@ -252,9 +252,6 @@ pub(crate) use ncollide2d as ncollide;
 pub(crate) use nphysics2d as nphysics;
 
 pub mod bodies;
-pub mod position;
-
-pub use self::position::Position;
 
 /*
 /// Convenience function for configuring and building a `Dispatcher` with all

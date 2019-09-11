@@ -1,7 +1,10 @@
-use shrinkwraprs::Shrinkwrap;
-use specs::{prelude::*, Component};
-
 use crate::{nalgebra::RealField, nphysics::math::Isometry};
+
+use shrinkwraprs::Shrinkwrap;
+use specs::{Component, DenseVecStorage};
+
+#[cfg(feature = "serialization")]
+use serde::{Deserialize, Serialize};
 
 /// An implementation of the `Position` trait is required for the
 /// synchronisation of the position of Specs and nphysics objects.
@@ -15,8 +18,8 @@ pub trait Position<N: RealField>: Component + Send + Sync {
     fn set_isometry(&mut self, isometry: &Isometry<N>) -> &mut Self;
 }
 
-#[cfg(feature = "amethyst-transform")]
-impl Position<f32> for amethyst::core::Transform {
+#[cfg(feature = "amethyst")]
+impl Position<f32> for amethyst_core::Transform {
     fn isometry(&self) -> &Isometry<f32> {
         self.isometry()
     }
@@ -30,14 +33,10 @@ impl Position<f32> for amethyst::core::Transform {
     }
 }
 
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 #[derive(Component, Shrinkwrap, Clone, Debug, PartialEq)]
+#[shrinkwrap(mutable)]
 pub struct SimplePosition<N: RealField>(pub Isometry<N>);
-
-impl<N: RealField> Default for SimplePosition<N> {
-    fn default() -> Self {
-        SimplePosition(Isometry::identity())
-    }
-}
 
 impl<N: RealField> Position<N> for SimplePosition<N> {
     fn isometry(&self) -> &Isometry<N> {

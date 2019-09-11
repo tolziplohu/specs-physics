@@ -1,22 +1,29 @@
-use super::{
-    cross::GeneralizedCross,
-    status::{ActivationStatus, BodyStatus, BodyUpdateStatus},
-    Acceleration,
-    AdvancePosition,
-    AngularInertia,
-    AugmentedInertia,
-    CenterOfMass,
-    CombinedInertia,
-    ExternalForces,
-    GlobalCenterOfMass,
-    GlobalInertia,
-    InvertedAugmentedInertia,
-    Mass,
-    Motion,
-    Velocity,
-};
+use super::{cross::GeneralizedCross, RigidBodyFlags, RigidBodyProperties};
 
 use crate::{
+    bodies::{
+        components::{
+            internal::{
+                AdvancePosition,
+                AugmentedInertia,
+                GlobalCenterOfMass,
+                GlobalInertia,
+                InvertedAugmentedInertia,
+            },
+            Acceleration,
+            ActivationStatus,
+            AngularInertia,
+            BodyStatus,
+            BodyUpdateStatus,
+            CenterOfMass,
+            ExternalForces,
+            Mass,
+            Position,
+            Velocity,
+        },
+        CombinedInertia,
+        Motion,
+    },
     nalgebra::{geometry::Translation, zero as na_zero, DVectorSlice, DVectorSliceMut, RealField},
     ncollide::{
         interpolation::{ConstantLinearVelocityRigidMotion, ConstantVelocityRigidMotion},
@@ -29,7 +36,6 @@ use crate::{
             Inertia,
             Isometry,
             Point,
-            SpatialVector,
             Vector,
             Velocity as NVelocity,
             SPATIAL_DIM,
@@ -45,125 +51,48 @@ use crate::{
         },
         solver::{ForceDirection, IntegrationParameters},
     },
-    position::Position,
 };
 
-use bitflags::bitflags;
-use specs::{
-    hibitset::BitSetLike,
-    join::{BitAnd, Join},
-    prelude::*,
-    shred::{Fetch, FetchMut},
-    storage::{MaskedStorage, UnprotectedStorage},
-    world::EntitiesRes,
-    Component,
-};
+use shrinkwraprs::Shrinkwrap;
+use specs::{Component, DenseVecStorage, Entity, Join, WriteStorage};
 
-#[cfg(feature = "serialization")]
-use serde::{Deserialize, Serialize};
-
-pub(crate) type RigidBodySystemData<'a, N, P> = (
-    WriteStorage<'a, P>,
-    WriteStorage<'a, AdvancePosition<N, P, <P as Component>::Storage>>,
-    WriteStorage<'a, Velocity<N>>,
-    WriteStorage<'a, Acceleration<N>>,
-    WriteStorage<'a, ExternalForces<N>>,
-    WriteStorage<'a, Mass<N>>,
-    WriteStorage<'a, CenterOfMass<N>>,
-    WriteStorage<'a, GlobalCenterOfMass<N>>,
-    WriteStorage<'a, AngularInertia<N>>,
-    WriteStorage<'a, GlobalInertia<N>>,
-    WriteStorage<'a, AugmentedInertia<N>>,
-    WriteStorage<'a, InvertedAugmentedInertia<N>>,
-    WriteStorage<'a, RigidBodyProperties<N>>,
-    WriteStorage<'a, ActivationStatus<N>>,
-    WriteStorage<'a, BodyStatus>,
-    WriteStorage<'a, BodyUpdateStatus>,
+#[derive(Shrinkwrap)]
+#[shrinkwrap(mutable)]
+pub(crate) struct RigidBodySet<'a, N: RealField, P: Position<N>>(
+    pub WriteStorage<'a, RigidBody<N, P>>,
 );
 
-pub(crate) struct RigidBodySet<'a, N: RealField, P: Position<N>> {
-    positions: WriteStorage<'a, P>,
-    advance_positions: WriteStorage<'a, AdvancePosition<N, P, <P as Component>::Storage>>,
-    velocities: WriteStorage<'a, Velocity<N>>,
-    accelerations: WriteStorage<'a, Acceleration<N>>,
-    external_forces: WriteStorage<'a, ExternalForces<N>>,
-    masses: WriteStorage<'a, Mass<N>>,
-    centers_of_mass: WriteStorage<'a, CenterOfMass<N>>,
-    global_centers_of_mass: WriteStorage<'a, GlobalCenterOfMass<N>>,
-    angular_inertias: WriteStorage<'a, AngularInertia<N>>,
-    global_inertias: WriteStorage<'a, GlobalInertia<N>>,
-    augmented_inertias: WriteStorage<'a, AugmentedInertia<N>>,
-    augmented_inertias_inv: WriteStorage<'a, InvertedAugmentedInertia<N>>,
-    properties: WriteStorage<'a, RigidBodyProperties<N>>,
-    activations: WriteStorage<'a, ActivationStatus<N>>,
-    statuses: WriteStorage<'a, BodyStatus>,
-    updates: WriteStorage<'a, BodyUpdateStatus>,
-}
-
-impl<N: RealField, P: Position<N>> BodySet<N> for RigidBodySet<'static, N, P> {
+impl<'a, N: RealField, P: Position<N>> BodySet<N> for RigidBodySet<'a, N, P> {
     type Body = RigidBody<N, P>;
     type Handle = Entity;
 
     fn get(&self, handle: Self::Handle) -> Option<&Self::Body> {
-        let properties = *self.properties.get(handle)?;
-        let activation = *self.activations.get(handle)?;
-        let status = *self.statuses.get(handle)?;
-        let update = *self.updates.get(handle)?;
-        let position = *self.positions.get(handle)?;
-        let velocity = *self.velocities.get(handle)?;
-        let acceleration = *self.accelerations.get(handle)?;
-        let mass = *self.masses.get(handle)?;
-        let angular_inertia = *self.angular_inertias.get(handle)?;
-        let center_of_mass = *self.centers_of_mass.get(handle)?;
-        let external_forces = *self.external_forces.get(handle)?;
-        let advance_position = *self.advance_positions.get(handle)?;
-        let global_center_of_mass = *self.global_centers_of_mass.get(handle)?;
-        let global_inertia = *self.global_inertias.get(handle)?;
-        let augmented_inertia = *self.augmented_inertias.get(handle)?;
-        let augmented_inertia_inv = *self.augmented_inertias_inv.get(handle)?;
-        let b = RigidBody {
-            properties,
-            activation,
-            status,
-            update,
-            position,
-            velocity,
-            acceleration,
-            mass,
-            angular_inertia,
-            center_of_mass,
-            external_forces,
-            advance_position,
-            global_center_of_mass,
-            global_inertia,
-            augmented_inertia,
-            augmented_inertia_inv,
-            converted_activation_status: unimplemented!(),
-        };
-        unimplemented!()
+        self.0.get(handle)
     }
 
     fn get_mut(&mut self, handle: Self::Handle) -> Option<&mut Self::Body> {
-        unimplemented!()
+        self.0.get_mut(handle)
     }
 
     fn get_pair_mut(
         &mut self,
-        handle1: Self::Handle,
-        handle2: Self::Handle,
+        _handle1: Self::Handle,
+        _handle2: Self::Handle,
     ) -> (Option<&mut Self::Body>, Option<&mut Self::Body>) {
         unimplemented!()
     }
 
     fn contains(&self, handle: Self::Handle) -> bool {
-        unimplemented!()
+        self.0.contains(handle)
     }
 
-    fn foreach(&self, f: impl FnMut(Self::Handle, &Self::Body)) {
-        unimplemented!()
+    fn foreach(&self, mut f: impl FnMut(Self::Handle, &Self::Body)) {
+        for (handle, body) in (self.fetched_entities(), &self.0).join() {
+            f(handle, body)
+        }
     }
 
-    fn foreach_mut(&mut self, f: impl FnMut(Self::Handle, &mut Self::Body)) {
+    fn foreach_mut(&mut self, _f: impl FnMut(Self::Handle, &mut Self::Body)) {
         unimplemented!()
     }
 
@@ -172,150 +101,11 @@ impl<N: RealField, P: Position<N>> BodySet<N> for RigidBodySet<'static, N, P> {
     }
 }
 
-bitflags! {
-    /// Component tracking changes for a body. This will be sticky business...
-    ///
-    /// # Size
-    /// 1 Byte
-    #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
-    #[derive(Component)]
-    pub struct RigidBodyFlags: u8 {
-        /// Whether the linear X axis is a kinematic degree of freedom
-        const KINEMATIC_TRANSLATION_X      = 0b10000000;
-
-        /// Whether the linear Y axis is a kinematic degree of freedom
-        const KINEMATIC_TRANSLATION_Y      = 0b01000000;
-
-        /// Whether the linear Z axis is a kinematic degree of freedom
-        /// Ignored when the `dim2` feature is set.
-        const KINEMATIC_TRANSLATION_Z      = 0b00100000;
-
-        /// Whether the angular X axis is a kinematic degree of freedom
-        const KINEMATIC_ROTATION_X         = 0b00010000;
-
-        /// Whether the angular Y axis is a kinematic degree of freedom
-        /// Ignored when the `dim2` feature is set.
-        const KINEMATIC_ROTATION_Y         = 0b00001000;
-
-        /// Whether the angular Z axis is a kinematic degree of freedom
-        /// Ignored when the `dim2` feature is set.
-        const KINEMATIC_ROTATION_Z         = 0b00000100;
-
-        /// Enables the universal gravitational force for this Body.
-        const GRAVITY_ENABLED              = 0b00000010;
-
-        /// Enables linear motion interpolation for CCD
-        const LINEAR_INTERPOLATION_ENABLED = 0b00000001;
-    }
-}
-
-impl Default for RigidBodyFlags {
-    #[inline]
-    fn default() -> Self {
-        RigidBodyFlags::GRAVITY_ENABLED
-    }
-}
-
-#[cfg(feature = "dim3")]
-impl<N: RealField> Into<SpatialVector<N>> for RigidBodyFlags {
-    fn into(self) -> SpatialVector<N> {
-        SpatialVector::new(
-            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_X) {
-                N::one()
-            } else {
-                N::zero()
-            },
-            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_Y) {
-                N::one()
-            } else {
-                N::zero()
-            },
-            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_Z) {
-                N::one()
-            } else {
-                N::zero()
-            },
-            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_X) {
-                N::one()
-            } else {
-                N::zero()
-            },
-            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_Y) {
-                N::one()
-            } else {
-                N::zero()
-            },
-            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_Z) {
-                N::one()
-            } else {
-                N::zero()
-            },
-        )
-    }
-}
-
-#[cfg(feature = "dim2")]
-impl<N: RealField> Into<SpatialVector<N>> for RigidBodyFlags {
-    fn into(self) -> SpatialVector<N> {
-        SpatialVector::new(
-            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_X) {
-                N::one()
-            } else {
-                N::zero()
-            },
-            if self.contains(RigidBodyFlags::KINEMATIC_TRANSLATION_Y) {
-                N::one()
-            } else {
-                N::zero()
-            },
-            if self.contains(RigidBodyFlags::KINEMATIC_ROTATION_X) {
-                N::one()
-            } else {
-                N::zero()
-            },
-        )
-    }
-}
-
-/// Component that describes a rigid body's characteristics.
-///
-/// # Size
-/// 4 x `RealField` + `usize` + 1 byte
-#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
-#[derive(Component, Debug, Clone, PartialEq)]
-pub struct RigidBodyProperties<N: RealField> {
-    /// Associated flags for this body
-    pub flags: RigidBodyFlags,
-
-    /// Linear damping/drag coefficient
-    pub damping: N,
-    /// Angular damping/drag coefficient
-    pub damping_angular: N,
-
-    /// Maximum allowed linear velocity
-    pub max_velocity: N,
-    /// Maximum allowed angular velocity
-    pub max_velocity_angular: N,
-
-    // Used for things.
-    pub(crate) companion_id: usize,
-}
-
-impl<N: RealField> Default for RigidBodyProperties<N> {
-    #[inline]
-    fn default() -> Self {
-        RigidBodyProperties {
-            flags: RigidBodyFlags::default(),
-            damping: N::zero(),
-            damping_angular: N::zero(),
-            max_velocity: N::max_value(),
-            max_velocity_angular: N::max_value(),
-            companion_id: 0,
-        }
-    }
-}
-
-pub(crate) struct RigidBody<N: RealField, P: Position<N>> {
+// TODO: problems (such as the 'static lifetime bound on Body's)
+// TODO: prevent us from directly implementing onto storage pointers.
+// TODO: We must synchronize to our buddy here instead.
+#[derive(Component)]
+pub struct RigidBody<N: RealField, P: Position<N>> {
     properties: RigidBodyProperties<N>,
     activation: ActivationStatus<N>,
     status: BodyStatus,
@@ -610,9 +400,9 @@ impl<P: Position<N>, N: RealField> Body<N> for RigidBody<N, P> {
         #[cfg(feature = "dim2")]
         {
             if self.velocity.angular > self.properties.max_velocity_angular {
-                self.velocity.angular = self.max_velocity_angular;
-            } else if self.velocity.angular < -self.max_velocity_angular {
-                self.velocity.angular = -self.max_velocity_angular;
+                self.velocity.angular = self.properties.max_velocity_angular;
+            } else if self.velocity.angular < -self.properties.max_velocity_angular {
+                self.velocity.angular = -self.properties.max_velocity_angular;
             }
         }
 

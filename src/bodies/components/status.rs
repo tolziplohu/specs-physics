@@ -8,7 +8,7 @@ use crate::{
 };
 
 use bitflags::bitflags;
-use specs::{prelude::*, Component};
+use specs::{Component, DenseVecStorage};
 
 #[cfg(feature = "serialization")]
 use serde::{Deserialize, Serialize};

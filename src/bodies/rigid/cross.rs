@@ -1,4 +1,5 @@
 use crate::nalgebra::{Matrix2, Matrix3, RealField, RowVector2, Vector1, Vector2, Vector3};
+
 /// This is a non-standard generalization of the cross product design
 /// exclusively to group the 3D cross product and the 2D perpendicular product
 /// behind the same interface.
