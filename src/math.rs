@@ -9,6 +9,7 @@ use crate::nalgebra::{
     UnitComplex,
     UnitQuaternion,
     Vector3,
+    VectorN,
     U1,
     U2,
     U3,
@@ -25,6 +26,7 @@ mod shamanic_tome {
     pub trait DimensionalSealSpell {}
 }
 
+/*
 pub trait PhysicalDimension: DimensionalSealSpell {
     type Float: RealField;
     type Dimension: Dim + DimName<Value = Self::DimensionValue> + IsNotStaticOne;
@@ -32,6 +34,16 @@ pub trait PhysicalDimension: DimensionalSealSpell {
         + Mul<<U1 as DimName>::Value, Output = Self::InternalDimProd>;
     type InternalDimProd: ArrayLength<Self::Float>;
     type Rotation: Rotation<Point<Self::Float, Self::Dimension>>;
+    type AngularMotion;
+    type Vector;
+}*/
+
+pub trait PhysicalDimension: DimensionalSealSpell {
+    type Float;
+    type Dimension;
+    type Rotation;
+    type AngularMotion;
+    type Vector;
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq)]
@@ -39,12 +51,23 @@ pub struct F32D2;
 
 impl DimensionalSealSpell for F32D2 {}
 
+/*
 impl PhysicalDimension for F32D2 {
+    type AngularMotion = Self::Float;
     type Dimension = U2;
     type DimensionValue = <U2 as DimName>::Value;
     type Float = f32;
     type InternalDimProd = <Self::DimensionValue as Mul<<U1 as DimName>::Value>>::Output;
     type Rotation = UnitComplex<f32>;
+    type Vector = VectorN<Self::Float, Self::Dimension>;
+}
+*/
+impl PhysicalDimension for F32D2 {
+    type AngularMotion = Self::Float;
+    type Dimension = U2;
+    type Float = f32;
+    type Rotation = UnitComplex<f32>;
+    type Vector = VectorN<Self::Float, Self::Dimension>;
 }
 
 pub type Isometry3<N: RealField> = NalgebraIsometry<N, U3, UnitQuaternion<N>>;

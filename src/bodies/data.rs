@@ -1,4 +1,5 @@
 use crate::{
+    math::PhysicalDimension,
     nalgebra::{
         Isometry as NalgebraIsometry,
         RealField,
@@ -6,23 +7,25 @@ use crate::{
         UnitQuaternion,
         Vector2,
         Vector3,
+        Vector6,
+        VectorN,
         U2,
         U3,
     },
     nphysics::math::{Inertia, Isometry as NphysicsIsometry, Vector},
 };
 
-use super::components::{AngularInertia, Mass};
+//use super::components::{AngularInertia, Mass};
 
 use std::{mem::transmute as mem_transmute, ops::Mul};
 
 #[cfg(feature = "serialization")]
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "dim3")]
-pub type AngularMotion<N> = AngularMotion3<N>;
-#[cfg(feature = "dim2")]
-pub type AngularMotion<N> = AngularMotion2<N>;
+//#[cfg(feature = "dim3")]
+//pub type AngularMotion<N> = AngularMotion3<N>;
+//#[cfg(feature = "dim2")]
+//pub type AngularMotion<N> = AngularMotion2<N>;
 
 /// Describes a motion, or difference, in space.
 /// Such as a Velocity, an Acceleration, or a Force.
@@ -32,13 +35,14 @@ pub type AngularMotion<N> = AngularMotion2<N>;
 /// `dim2`: 3 x `RealField`
 #[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct Motion<N: RealField> {
-    pub linear: Vector<N>,
-    pub angular: AngularMotion<N>,
+pub struct Motion<D: PhysicalDimension> {
+    pub linear: D::Vector,
+    pub angular: D::AngularMotion,
 }
+/*
 
 #[cfg(feature = "dim3")]
-impl<N: RealField> Default for Motion<N> {
+impl<D: PhysicalDimension> Default for Motion<N> {
     #[inline]
     fn default() -> Self {
         Motion {
@@ -49,7 +53,7 @@ impl<N: RealField> Default for Motion<N> {
 }
 
 #[cfg(feature = "dim2")]
-impl<N: RealField> Default for Motion<N> {
+impl<D: PhysicalDimension> Default for Motion<N> {
     #[inline]
     fn default() -> Self {
         Motion {
@@ -58,12 +62,15 @@ impl<N: RealField> Default for Motion<N> {
         }
     }
 }
-
-impl<N: RealField> Mul<N> for Motion<N> {
+*/
+impl<D: PhysicalDimension> Mul<D::Float> for Motion<D>
+where
+    D::Float: RealField,
+{
     type Output = Self;
 
     #[inline]
-    fn mul(self, rhs: N) -> Self::Output {
+    fn mul(self, rhs: D::Float) -> Self::Output {
         Motion {
             linear: self.linear * rhs,
             angular: self.angular * rhs,
@@ -71,65 +78,73 @@ impl<N: RealField> Mul<N> for Motion<N> {
     }
 }
 
-#[cfg(feature = "dim3")]
-pub(crate) type MotionAsVector<N> = crate::nalgebra::Vector6<N>;
-
-#[cfg(feature = "dim2")]
-pub(crate) type MotionAsVector<N> = crate::nalgebra::Vector3<N>;
-
-impl<N: RealField> Motion<N> {
+impl<D: PhysicalDimension<Dimension = U2>> Motion<D>
+where
+    D::Float: RealField,
+{
     #[inline]
-    #[cfg(feature = "dim3")]
     pub fn zero(&mut self) {
-        self.linear = Vector::zeros();
-        self.angular = Vector::zeros();
+        self.linear = D::Vector::zeros();
+        self.angular = D::AngularMotion::zero();
     }
 
     #[inline]
-    #[cfg(feature = "dim2")]
-    pub fn zero(&mut self) {
-        self.linear = Vector::zeros();
-        self.angular = N::zero();
-    }
-
-    #[inline]
-    pub(crate) fn as_slice(&self) -> &[N] {
-        self.as_vector().as_slice()
-    }
-
-    #[inline]
-    pub(crate) fn as_vector(&self) -> &MotionAsVector<N> {
+    pub(crate) fn as_vector(&self) -> &Vector3<D::Float> {
         unsafe { mem_transmute(self) }
     }
 
     #[inline]
-    pub(crate) fn as_mut_slice(&mut self) -> &mut [N] {
-        self.as_vector_mut().as_mut_slice()
-    }
-
-    #[inline]
-    pub(crate) fn as_vector_mut(&mut self) -> &mut MotionAsVector<N> {
+    pub(crate) fn as_vector_mut(&mut self) -> &mut Vector3<D::Float> {
         unsafe { mem_transmute(self) }
     }
 
     #[inline]
-    #[cfg(feature = "dim3")]
-    pub(crate) fn from_slice(data: &[N]) -> Self {
+    pub(crate) fn from_slice(data: &[D::Float]) -> Self {
         Motion {
-            linear: Vector::new(data[0], data[1], data[2]),
-            angular: Vector::new(data[3], data[4], data[5]),
-        }
-    }
-
-    #[inline]
-    #[cfg(feature = "dim2")]
-    pub(crate) fn from_slice(data: &[N]) -> Self {
-        Motion {
-            linear: Vector::new(data[0], data[1]),
+            linear: D::Vector::new(data[0], data[1]),
             angular: data[2],
         }
     }
 }
+/*
+impl<D: PhysicalDimension<Dimension = U3>> Motion<D> {
+    #[inline]
+    pub fn zero(&mut self) {
+        self.linear = D::Vector::zeros();
+        self.angular = D::AngularMotion::zeros();
+    }
+
+    #[inline]
+    pub(crate) fn as_vector(&self) -> &Vector6<D::Float> {
+        unsafe { mem_transmute(self) }
+    }
+
+    #[inline]
+    pub(crate) fn as_vector_mut(&mut self) -> &mut Vector6<D::Float> {
+        unsafe { mem_transmute(self) }
+    }
+
+    #[inline]
+    pub(crate) fn from_slice(data: &[D::Float]) -> Self {
+        Motion {
+            linear: D::Vector::new(data[0], data[1], data[2]),
+            angular: Vector::new(data[3], data[4], data[5]),
+        }
+    }
+}*/
+
+impl<D: PhysicalDimension> Motion<D> {
+    #[inline]
+    pub(crate) fn as_slice(&self) -> &[D::Float] {
+        self.as_vector().as_slice()
+    }
+
+    #[inline]
+    pub(crate) fn as_mut_slice(&mut self) -> &mut [D::Float] {
+        self.as_vector_mut().as_mut_slice()
+    }
+}
+/*
 
 #[cfg(feature = "dim3")]
 pub type AngularInertiaType<N> = crate::nalgebra::Matrix3<N>;
@@ -231,3 +246,4 @@ impl<N: RealField> CombinedInertia<N> {
         Inertia::new(inv_mass, inv_angular)
     }
 }
+*/

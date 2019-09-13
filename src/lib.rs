@@ -251,7 +251,7 @@ pub(crate) use ncollide2d as ncollide;
 #[cfg(feature = "dim2")]
 pub(crate) use nphysics2d as nphysics;
 
-//pub mod bodies;
+pub mod bodies;
 pub mod math;
 
 /*
