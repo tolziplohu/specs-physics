@@ -29,40 +29,118 @@ use crate::{
 ///     .local_center_of_mass(Point3::new(0.0, 0.0, 0.0))
 ///     .build();
 /// ```
-pub struct PhysicsBodyBuilder<N: RealField> {
-    gravity_enabled: bool,
-    body_status: BodyStatus,
-    velocity: Velocity3<N>,
-    angular_inertia: Matrix3<N>,
-    mass: N,
-    local_center_of_mass: Point3<N>,
+// TODO: This could be expanded through BodyData to build not only rigidbodies,
+// TODO: but FEMVolumes, MassConstraintSystems, and MassSpringSystems.
+pub struct PhysicsBodyBuilder<'a, N: RealField, P: Position<N>> {
+    world: &'a World,
+    entity: Option<Entity>,
+    body_type: Option<BodyData<N>>,
+    status: Option<BodyStatus>,
+
+    position: Option<P>,
+    velocity: Option<Velocity<N>>,
+    acceleration: Option<Acceleration<N>>,
+    external_forces: Option<ExternalForces<N>>,
+
+    mass: Option<Mass<N>>,
+    angular_inertia: Option<AngularInertia<N>>,
+    center_of_mass: Option<CenterOfMass<N>>,
 }
 
-impl<N: RealField> From<BodyStatus> for PhysicsBodyBuilder<N> {
-    /// Creates a new `PhysicsBodyBuilder` from the given `BodyStatus`. This
-    /// also populates the `PhysicsBody` with sane defaults.
-    fn from(body_status: BodyStatus) -> Self {
-        Self {
-            gravity_enabled: false,
-            body_status,
-            velocity: Velocity3::zero(),
-            angular_inertia: Matrix3::zeros(),
-            mass: N::from_f32(1.2).unwrap(),
-            local_center_of_mass: Point3::origin(),
+impl<'a, N: RealField, P: Position<N>> PhysicsBodyBuilder<'a, N, P> {
+    pub fn create_body(world: &mut World) -> Self {
+        Self::create_body_internal(world, None, None, None)
+    }
+
+    pub fn create_body_on_entity(world: &mut World, entity: Entity) -> Self {
+        Self::create_body_internal(world, Some(entity), None, None)
+    }
+
+    pub fn create_rigid_body(world: &mut World) -> Self {
+        Self::create_body_internal(world, None, Some(BodyData::new_rigid()), None)
+    }
+
+    pub fn create_rigid_body_on_entity(world: &mut World, entity: Entity) -> Self {
+        Self::create_body_internal(world, Some(entity), Some(BodyData::new_rigid()), None)
+    }
+
+    pub fn create_kinematic_rigid_body(world: &mut World) -> Self {
+        Self::create_body_internal(
+            world,
+            None,
+            Some(BodyData::new_rigid()),
+            Some(BodyStatus::Kinematic),
+        )
+    }
+
+    pub fn create_kinematic_rigid_body_on_entity(world: &mut World, entity: Entity) -> Self {
+        Self::create_body_internal(
+            world,
+            Some(entity),
+            Some(BodyData::new_rigid()),
+            Some(BodyStatus::Kinematic),
+        )
+    }
+
+    pub fn create_static_rigid_body(world: &mut World) -> Self {
+        Self::create_body_internal(
+            world,
+            None,
+            Some(BodyData::new_rigid()),
+            Some(BodyStatus::Static),
+        )
+    }
+
+    pub fn create_static_rigid_body_on_entity(world: &mut World, entity: Entity) -> Self {
+        Self::create_body_internal(
+            world,
+            Some(entity),
+            Some(BodyData::new_rigid()),
+            Some(BodyStatus::Static),
+        )
+    }
+
+    fn create_body_internal(
+        world: &World,
+        entity: Option<Entity>,
+        body_type: Option<BodyData<N>>,
+        status: Option<BodyStatus>,
+    ) -> Self {
+        PhysicsBodyBuilder {
+            world,
+            entity,
+            body_type,
+            status,
+
+            None,
+            None,
+            None,
+            None,
+
+            None,
+            None,
+            None,
         }
     }
-}
 
-impl<N: RealField> PhysicsBodyBuilder<N> {
-    /// Sets the `gravity_enabled` value of the `PhysicsBodyBuilder`.
-    pub fn gravity_enabled(mut self, gravity_enabled: bool) -> Self {
-        self.gravity_enabled = gravity_enabled;
+    pub fn position(mut self, position: P) -> Self {
+        self.position = Some(position);
         self
     }
 
     // Sets the `velocity` value of the `PhysicsBodyBuilder`.
-    pub fn velocity(mut self, velocity: Velocity3<N>) -> Self {
-        self.velocity = velocity;
+    pub fn velocity(mut self, velocity: Motion<N>) -> Self {
+        self.velocity = Some(velocity);
+        self
+    }
+
+    //pub fn velocity_linear(mut self, velocity: Vector<N>)
+
+    //pub fn acceleration(mut self, acceleration: )
+
+    /// Sets the `gravity_enabled` value of the `PhysicsBodyBuilder`.
+    pub fn gravity_enabled(mut self, gravity_enabled: bool) -> Self {
+        self.gravity_enabled = gravity_enabled;
         self
     }
 
@@ -78,7 +156,7 @@ impl<N: RealField> PhysicsBodyBuilder<N> {
         self
     }
 
-    /// Sets the `local_center_of_mass` value of the `PhysicsBodyBuilder`.
+    /// Sets the local center of mass of the Body.
     pub fn local_center_of_mass(mut self, local_center_of_mass: Point3<N>) -> Self {
         self.local_center_of_mass = local_center_of_mass;
         self
@@ -86,16 +164,121 @@ impl<N: RealField> PhysicsBodyBuilder<N> {
 
     /// Builds the `PhysicsBody` from the values set in the `PhysicsBodyBuilder`
     /// instance.
-    pub fn build(self) -> PhysicsBody<N> {
-        PhysicsBody {
-            handle: None,
-            gravity_enabled: self.gravity_enabled,
-            body_status: self.body_status,
-            velocity: self.velocity,
-            angular_inertia: self.angular_inertia,
-            mass: self.mass,
-            local_center_of_mass: self.local_center_of_mass,
-            external_forces: Force3::zero(),
+    pub fn build(self) -> Entity {
+        let entity = self.unwrap_or_else(|| self.world.entities_mut().alloc.allocate());
+
+        entity
+    }
+}
+
+enum BodyData<N: RealField> {
+    Rigid {
+        properties: RigidBodyProperties<N>,
+        flags: RigidBodyFlags<N>,
+    },
+}
+
+impl<N: RealField> BodyData<N> {
+    fn new_rigid() -> Self {
+        Self::Rigid {
+            properties: RigidBodyProperties::default(),
+            flags: RigidBodyFlags::default(),
         }
+    }
+
+    fn with_rigid_properties(mut self, properties: RigidBodyProperties<N>) -> Self {
+        match self {
+            Self::Rigid(data) => {
+                data.properties = properties;
+                data
+            }
+            _ => Self::new_rigid().with_rigid_properties(properties),
+        }
+    }
+
+    fn with_rigid_flags(mut self, flags: RigidBodyFlags<N>) -> Self {
+        match self {
+            Self::Rigid(data) => {
+                data.flags = flags;
+                data
+            }
+            _ => Self::new_rigid().with_rigid_flags(flags),
+        }
+    }
+}
+
+pub trait PhysicsWorldExt {
+    fn create_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder;
+
+    fn create_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder;
+
+    fn create_rigid_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder;
+
+    fn create_rigid_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder;
+
+    fn create_kinematic_rigid_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder;
+
+    fn create_kinematic_rigid_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder;
+
+    fn create_static_rigid_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder;
+
+    fn create_static_rigid_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder;
+}
+
+impl PhysicsWorldExt for World {
+    fn create_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_body(&mut self)
+    }
+
+    fn create_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_body_on_entity(&mut self, entity)
+    }
+
+    fn create_rigid_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_rigid_body(&mut self)
+    }
+
+    fn create_rigid_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_rigid_body_on_entity(&mut self, entity)
+    }
+
+    fn create_kinematic_rigid_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_kinematic_rigid_body(&mut self)
+    }
+
+    fn create_kinematic_rigid_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_kinematic_rigid_body_on_entity(&mut self, entity)
+    }
+
+    fn create_static_rigid_body<N: RealField, P: Position<N>>(&mut self) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_static_rigid_body(&mut self)
+    }
+
+    fn create_static_rigid_body_on_entity<N: RealField, P: Position<N>>(
+        &mut self,
+        entity: Entity,
+    ) -> PhysicsBodyBuilder {
+        PhysicsBodyBuilder::<N, P>::create_static_rigid_body_on_entity(&mut self, entity)
     }
 }

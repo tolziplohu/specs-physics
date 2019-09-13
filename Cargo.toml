@@ -31,9 +31,11 @@ objekt = "0.1.2"
 shrinkwraprs = "0.2.1"
 
 specs = { version = "0.15.0", features = ["specs-derive"] }
-specs-hierarchy = { git = "https://github.com/cedric-h/specs-hierarchy.git", branch = "update-specs" }
+specs-hierarchy = "0.5.1"
 
-nalgebra = "0.18.0"
+alga = "0.9.1"
+generic-array = "0.12.3"
+nalgebra = "0.18.1"
 
 ncollide2d = { version = "0.20.1", optional = true }
 ncollide3d = { version = "0.20.1", optional = true }

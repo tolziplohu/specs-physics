@@ -1,6 +1,15 @@
 use crate::{
-    nalgebra::RealField,
-    nphysics::math::{Inertia, Isometry, Vector},
+    nalgebra::{
+        Isometry as NalgebraIsometry,
+        RealField,
+        UnitComplex,
+        UnitQuaternion,
+        Vector2,
+        Vector3,
+        U2,
+        U3,
+    },
+    nphysics::math::{Inertia, Isometry as NphysicsIsometry, Vector},
 };
 
 use super::components::{AngularInertia, Mass};
@@ -11,10 +20,9 @@ use std::{mem::transmute as mem_transmute, ops::Mul};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "dim3")]
-pub type AngularMotion<N> = Vector<N>;
-
+pub type AngularMotion<N> = AngularMotion3<N>;
 #[cfg(feature = "dim2")]
-pub type AngularMotion<N> = N;
+pub type AngularMotion<N> = AngularMotion2<N>;
 
 /// Describes a motion, or difference, in space.
 /// Such as a Velocity, an Acceleration, or a Force.
@@ -181,14 +189,14 @@ impl<N: RealField> Into<Inertia<N>> for CombinedInertia<N> {
 impl<N: RealField> CombinedInertia<N> {
     #[inline]
     #[cfg(feature = "dim3")]
-    pub(crate) fn transformed(&self, isometry: Isometry<N>) -> Inertia<N> {
+    pub(crate) fn transformed(&self, isometry: NphysicsIsometry<N>) -> Inertia<N> {
         let rot = isometry.rotation.to_rotation_matrix();
         Inertia::new(self.linear, rot * self.angular * rot.inverse())
     }
 
     #[inline]
     #[cfg(feature = "dim2")]
-    pub(crate) fn transformed(&self, _isometry: Isometry<N>) -> Inertia<N> {
+    pub(crate) fn transformed(&self, _isometry: NphysicsIsometry<N>) -> Inertia<N> {
         Inertia::new(self.linear, self.angular)
     }
 
