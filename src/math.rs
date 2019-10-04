@@ -26,7 +26,7 @@ mod shamanic_tome {
     pub trait DimensionalSealSpell {}
 }
 
-/*
+
 pub trait PhysicalDimension: DimensionalSealSpell {
     type Float: RealField;
     type Dimension: Dim + DimName<Value = Self::DimensionValue> + IsNotStaticOne;
