@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use specs::{
-    storage::ComponentEvent, world::Index, Join, ReadStorage, ReaderId, Resources, System,
+    storage::ComponentEvent, world::Index, Join, ReadStorage, ReaderId, World, System,
     SystemData, WriteExpect, WriteStorage,
 };
 

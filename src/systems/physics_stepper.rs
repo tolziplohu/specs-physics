@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use specs::{
-    world::Index, Entities, Entity, Read, Resources, System, SystemData, Write, WriteExpect,
+    world::Index, Entities, Entity, Read, World, System, SystemData, Write, WriteExpect,
 };
 
 use crate::events::{ContactEvent, ContactEvents, ContactType, ProximityEvent, ProximityEvents};
