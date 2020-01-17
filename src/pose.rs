@@ -34,7 +34,7 @@ impl Pose<f32> for amethyst::core::Transform {
 
 #[cfg(all(feature = "amethyst", feature = "dim2"))]
 impl Pose<f32> for amethyst::core::Transform {
-    fn sync(&mut self, pose: &Isometry<N>) {
+    fn sync(&mut self, pose: &Isometry<f32>) {
         let euler = self.rotation().euler_angles();
         self.set_rotation_euler(euler.0, euler.1, pose.rotation.angle());
         self.set_translation_x(pose.translation.x);
